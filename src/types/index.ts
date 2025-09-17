@@ -71,10 +71,20 @@ export interface ConfiguracaoSupervisor {
 }
 
 export interface DistribuicaoClientes {
-  estagiario_id: string;
+  usuario_id: string;
   categoria: 'NR' | '1' | '2' | '3' | '4' | '5' | '6';
   aba_destino: string;
   quantidade: number;
+}
+
+export interface Cliente {
+  id: string;
+  matricula: string;
+  nome: string;
+  telefone: string;
+  categoria: string;
+  ativo: boolean;
+  created_at: string;
 }
 
 export interface Usuario {

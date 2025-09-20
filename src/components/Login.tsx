@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Mail, Lock, Eye, EyeOff, LogIn, RefreshCw, ArrowLeft } from 'lucide-react';
-import { signInWithEmail, requestPasswordReset } from '../lib/supabase';
+import { Mail, Lock, Eye, EyeOff, LogIn, RefreshCw, ArrowLeft, Key } from 'lucide-react';
+import { signInWithEmail, requestPasswordReset, resetPassword } from '../lib/supabase';
 
 interface LoginProps {
   onLogin: () => void;
@@ -16,6 +16,11 @@ export function Login({ onLogin }: LoginProps) {
   const [resetEmail, setResetEmail] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
+  const [showResetCodeForm, setShowResetCodeForm] = useState(false);
+  const [resetCode, setResetCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [success, setSuccess] = useState('');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,6 +46,7 @@ export function Login({ onLogin }: LoginProps) {
     try {
       await requestPasswordReset(resetEmail);
       setResetSuccess(true);
+      setShowResetCodeForm(true);
     } catch (err: any) {
       setError(err.message || 'Erro ao solicitar redefinição de senha');
     } finally {
@@ -48,11 +54,45 @@ export function Login({ onLogin }: LoginProps) {
     }
   };
 
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (newPassword !== confirmPassword) {
+      setError('As senhas não coincidem');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setError('A senha deve ter pelo menos 6 caracteres');
+      return;
+    }
+
+    setResetLoading(true);
+    setError('');
+
+    try {
+      await resetPassword(resetEmail, resetCode, newPassword);
+      setSuccess('Senha redefinida com sucesso!');
+      setTimeout(() => {
+        resetForm();
+      }, 2000);
+    } catch (err: any) {
+      setError(err.message || 'Código inválido ou expirado');
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   const resetForm = () => {
     setShowResetForm(false);
+    setShowResetCodeForm(false);
     setResetEmail('');
+    setResetCode('');
+    setNewPassword('');
+    setConfirmPassword('');
     setResetSuccess(false);
     setError('');
+    setSuccess('');
   };
 
   if (showResetForm) {
@@ -80,7 +120,13 @@ export function Login({ onLogin }: LoginProps) {
                 </div>
               )}
 
-              {resetSuccess ? (
+              {success && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-green-800 mb-6">
+                  {success}
+                </div>
+              )}
+
+              {resetSuccess && !showResetCodeForm ? (
                 <div className="text-center py-8">
                   <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <RefreshCw className="w-8 h-8 text-green-600" />
@@ -90,12 +136,80 @@ export function Login({ onLogin }: LoginProps) {
                     Verifique seu email para o código de redefinição de senha.
                   </p>
                   <button
-                    onClick={resetForm}
+                    onClick={() => setShowResetCodeForm(true)}
                     className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg transition-all duration-200"
                   >
-                    Voltar ao Login
+                    Inserir Código
                   </button>
                 </div>
+              ) : showResetCodeForm ? (
+                <form onSubmit={handleResetPassword} className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Código de Redefinição *
+                    </label>
+                    <div className="relative">
+                      <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                      <input
+                        type="text"
+                        value={resetCode}
+                        onChange={(e) => setResetCode(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                        placeholder="Digite o código recebido por email"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Nova Senha *
+                    </label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                      <input
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                        placeholder="Digite sua nova senha"
+                        required
+                        minLength={6}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Confirmar Nova Senha *
+                    </label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                      <input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                        placeholder="Confirme sua nova senha"
+                        required
+                        minLength={6}
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={resetLoading}
+                    className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {resetLoading ? (
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Key className="w-5 h-5" />
+                    )}
+                    <span>{resetLoading ? 'Redefinindo...' : 'Redefinir Senha'}</span>
+                  </button>
+                </form>
               ) : (
                 <form onSubmit={handlePasswordReset} className="space-y-6">
                   <div>

@@ -72,6 +72,18 @@ export const updateUsuario = async (id: string, updates: Partial<Usuario>) => {
   return data;
 };
 
+export const deleteUsuario = async (id: string) => {
+  const { data, error } = await supabase
+    .from('usuarios')
+    .delete()
+    .eq('id', id)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+};
+
 export const requestPasswordReset = async (email: string) => {
   const codigo = Math.random().toString(36).substring(2, 15);
   const expira = new Date();
@@ -97,6 +109,39 @@ export const requestPasswordReset = async (email: string) => {
     mode: 'no-cors',
   });
   
+  return data;
+};
+
+export const resetPassword = async (email: string, codigo: string, novaSenha: string) => {
+  // Verificar se o código é válido e não expirou
+  const { data: usuario, error: checkError } = await supabase
+    .from('usuarios')
+    .select('*')
+    .eq('email', email)
+    .eq('codigo_reset', codigo)
+    .single();
+  
+  if (checkError || !usuario) {
+    throw new Error('Código inválido ou usuário não encontrado');
+  }
+  
+  if (new Date(usuario.codigo_reset_expira) < new Date()) {
+    throw new Error('Código expirado');
+  }
+  
+  // Atualizar senha e limpar código de reset
+  const { data, error } = await supabase
+    .from('usuarios')
+    .update({
+      senha: novaSenha,
+      codigo_reset: null,
+      codigo_reset_expira: null
+    })
+    .eq('email', email)
+    .select()
+    .single();
+  
+  if (error) throw error;
   return data;
 };
 
@@ -178,6 +223,18 @@ export const updateLink = async (id: string, updates: Partial<Link>) => {
   const { data, error } = await supabase
     .from('links')
     .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+};
+
+export const deleteLink = async (id: string) => {
+  const { data, error } = await supabase
+    .from('links')
+    .delete()
     .eq('id', id)
     .select()
     .single();
@@ -423,6 +480,18 @@ export const updateTicket = async (id: string, updates: Partial<Ticket>) => {
   const { data, error } = await supabase
     .from('tickets')
     .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  
+  if (error) throw error;
+  return data;
+};
+
+export const deleteTicket = async (id: string) => {
+  const { data, error } = await supabase
+    .from('tickets')
+    .delete()
     .eq('id', id)
     .select()
     .single();

@@ -1,13 +1,13 @@
 import React from 'react';
 import { 
   Users, FileText, Home, CheckSquare, LogOut, Settings, 
-  DollarSign, UserCheck, Cog, Phone, Link as LinkIcon, 
+  DollarSign, UserCheck, Cog, Phone, Link as LinkIcon, Plus,
   Wallet, User 
 } from 'lucide-react';
 import logo from '../../../download.png';
 
 interface NavigationProps {
-  currentView: 'dashboard' | 'ticket' | 'ligacao' | 'historico' | 'historico-ligacoes' | 'historico-links' | 'caixa' | 'solicitacoes' | 'distribuicao' | 'configuracoes' | 'perfil';
+  currentView: 'dashboard' | 'ticket' | 'ligacao' | 'historico' | 'historico-ligacoes' | 'historico-links' | 'caixa' | 'solicitacoes' | 'distribuicao' | 'configuracoes' | 'perfil' | 'novo-link' | 'usuarios';
   onViewChange: (view: NavigationProps["currentView"]) => void;
   currentUser: any;
   onLogout: () => void;
@@ -26,6 +26,7 @@ export function Navigation({ currentView, onViewChange, currentUser, onLogout }:
     if (['whatsapp', 'supervisao'].includes(currentUser.perfil)) {
       baseItems.push(
         { id: 'historico-links' as const, label: 'Histórico Links', icon: LinkIcon },
+        { id: 'novo-link' as const, label: 'Novo Link', icon: Plus },
         { id: 'caixa' as const, label: 'Caixa', icon: Wallet },
         { id: 'distribuicao' as const, label: 'Distribuição', icon: UserCheck },
         { id: 'solicitacoes' as const, label: 'Solicitações', icon: CheckSquare }
@@ -34,6 +35,7 @@ export function Navigation({ currentView, onViewChange, currentUser, onLogout }:
 
     if (currentUser.perfil === 'supervisao') {
       baseItems.push(
+        { id: 'usuarios' as const, label: 'Usuários', icon: Users },
         { id: 'configuracoes' as const, label: 'Configurações', icon: Cog }
       );
     }

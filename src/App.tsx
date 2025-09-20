@@ -12,11 +12,13 @@ import { SolicitacoesPanel } from './components/Forms/SolicitacoesPanel.tsx';
 import { DistribuicaoClientesPanel } from './components/Forms/DistribuicaoClientesPanel.tsx';
 import { ConfiguracoesPanel } from './components/Forms/ConfiguracoesPanel.tsx';
 import { UserConfigPanel } from './components/UserConfigPanel';
+import { LinkPanel } from './components/Forms/LinkPanel.tsx';
+import { UserManagementPanel } from './components/Forms/UserManagementPanel.tsx';
 
 function App() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [currentView, setCurrentView] = useState<'dashboard' | 'ticket' | 'ligacao' | 'historico' | 'historico-ligacoes' | 'historico-links' | 'caixa' | 'solicitacoes' | 'distribuicao' | 'configuracoes' | 'perfil'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'ticket' | 'ligacao' | 'historico' | 'historico-ligacoes' | 'historico-links' | 'caixa' | 'solicitacoes' | 'distribuicao' | 'configuracoes' | 'perfil' | 'novo-link' | 'usuarios'>('dashboard');
 
   useEffect(() => {
     checkUser();
@@ -70,10 +72,14 @@ function App() {
         return <HistoricoLigacoes currentUser={currentUser} />;
       case 'historico-links':
         return ['whatsapp', 'supervisao'].includes(currentUser.perfil) ? <HistoricoLinks currentUser={currentUser} /> : <div>Acesso negado</div>;
+      case 'novo-link':
+        return ['whatsapp', 'supervisao'].includes(currentUser.perfil) ? <LinkPanel currentUser={currentUser} /> : <div>Acesso negado</div>;
       case 'caixa':
         return ['whatsapp', 'supervisao'].includes(currentUser.perfil) ? <CaixaPanel currentUser={currentUser} /> : <div>Acesso negado</div>;
       case 'distribuicao':
         return ['whatsapp', 'supervisao'].includes(currentUser.perfil) ? <DistribuicaoClientesPanel /> : <div>Acesso negado</div>;
+      case 'usuarios':
+        return currentUser.perfil === 'supervisao' ? <UserManagementPanel /> : <div>Acesso negado</div>;
       case 'configuracoes':
         return currentUser.perfil === 'supervisao' ? <ConfiguracoesPanel /> : <div>Acesso negado</div>;
       case 'solicitacoes':

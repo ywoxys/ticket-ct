@@ -123,8 +123,11 @@ export interface Link {
   id: string;
   usuario_id: string;
   ticket_id: string;
+  nome: string;
+  url: string;
   link: string;
   status: 'ativo' | 'usado' | 'expirado';
+  expires_at?: string;
   created_at: string;
   usado_at?: string;
 }

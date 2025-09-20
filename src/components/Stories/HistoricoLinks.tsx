@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Link as LinkIcon, Calendar, User, Hash, Search, Filter, CheckCircle, XCircle, Clock } from 'lucide-react';
-import { getLinks } from '../../lib/supabase.ts';
+import { Link as LinkIcon, Calendar, User, Hash, Search, Filter, CheckCircle, XCircle, Clock, Edit2, Trash2, RefreshCw } from 'lucide-react';
+import { getLinks, updateLink, deleteLink } from '../../lib/supabase.ts';
 import type { Link } from '../../types';
 
 interface HistoricoLinksProps {
@@ -12,6 +12,7 @@ interface Filters {
     status: string;
     dataInicio: string;
     dataFim: string;
+    dataVencimento: string;
 }
 
 export function HistoricoLinks({ currentUser }: HistoricoLinksProps) {
@@ -19,11 +20,16 @@ export function HistoricoLinks({ currentUser }: HistoricoLinksProps) {
     const [filteredLinks, setFilteredLinks] = useState<Link[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [editingLink, setEditingLink] = useState<string | null>(null);
+    const [editData, setEditData] = useState<any>({});
+    const [deleting, setDeleting] = useState<{ [key: string]: boolean }>({});
+    const [resending, setResending] = useState<{ [key: string]: boolean }>({});
     const [filters, setFilters] = useState<Filters>({
         search: '',
         status: '',
         dataInicio: '',
         dataFim: '',
+        dataVencimento: '',
     });
 
     useEffect(() => {
@@ -83,6 +89,16 @@ export function HistoricoLinks({ currentUser }: HistoricoLinksProps) {
             });
         }
 
+        // Filtro de data de vencimento
+        if (filters.dataVencimento) {
+            const dataVencimento = new Date(filters.dataVencimento);
+            filtered = filtered.filter(link => {
+                if (!link.expires_at) return false;
+                const vencimentoDate = new Date(link.expires_at);
+                return vencimentoDate.toDateString() === dataVencimento.toDateString();
+            });
+        }
+
         setFilteredLinks(filtered);
     };
 
@@ -96,7 +112,95 @@ export function HistoricoLinks({ currentUser }: HistoricoLinksProps) {
             status: '',
             dataInicio: '',
             dataFim: '',
+            dataVencimento: '',
         });
+    };
+
+    const handleEdit = (link: Link) => {
+        setEditingLink(link.id);
+        setEditData({
+            nome: link.nome,
+            url: link.url || link.link,
+            expires_at: link.expires_at ? new Date(link.expires_at).toISOString().slice(0, 16) : '',
+        });
+    };
+
+    const handleSave = async (linkId: string) => {
+        try {
+            const updates = {
+                nome: editData.nome,
+                url: editData.url,
+                link: editData.url,
+                expires_at: editData.expires_at ? new Date(editData.expires_at).toISOString() : null,
+            };
+
+            await updateLink(linkId, updates);
+            setLinks(prev => 
+                prev.map(l => l.id === linkId ? { ...l, ...updates } : l)
+            );
+            setEditingLink(null);
+            setEditData({});
+        } catch (err) {
+            console.error('Erro ao atualizar link:', err);
+            setError('Erro ao atualizar link');
+        }
+    };
+
+    const handleCancel = () => {
+        setEditingLink(null);
+        setEditData({});
+    };
+
+    const handleDelete = async (linkId: string) => {
+        if (!confirm('Tem certeza que deseja apagar este link?')) return;
+        
+        setDeleting(prev => ({ ...prev, [linkId]: true }));
+        try {
+            await deleteLink(linkId);
+            setLinks(prev => prev.filter(l => l.id !== linkId));
+        } catch (err) {
+            console.error('Erro ao apagar link:', err);
+            setError('Erro ao apagar link');
+        } finally {
+            setDeleting(prev => ({ ...prev, [linkId]: false }));
+        }
+    };
+
+    const handleResend = async (link: Link) => {
+        setResending(prev => ({ ...prev, [link.id]: true }));
+        try {
+            // Lógica de reenvio aqui
+            console.log('Reenviando link:', link);
+        } catch (err) {
+            console.error('Erro ao reenviar link:', err);
+            setError('Erro ao reenviar link');
+        } finally {
+            setResending(prev => ({ ...prev, [link.id]: false }));
+        }
+    };
+
+    const getStatusColor = (link: Link) => {
+        if (link.expires_at && new Date(link.expires_at) < new Date()) {
+            return 'bg-red-100 text-red-800';
+        }
+        switch (link.status) {
+            case 'ativo': return 'bg-green-100 text-green-800';
+            case 'usado': return 'bg-blue-100 text-blue-800';
+            case 'expirado': return 'bg-red-100 text-red-800';
+            default: return 'bg-gray-100 text-gray-800';
+        }
+    };
+
+    const getStatusText = (link: Link) => {
+        if (link.expires_at && new Date(link.expires_at) < new Date()) {
+            return 'Expirado';
+        }
+        switch (link.status) {
+            case 'ativo': return 'Ativo';
+            case 'usado': return 'Usado';
+            case 'expirado': return 'Expirado';
+            default: return link.status;
+        }
     };
 
     if (loading) {
@@ -141,7 +245,7 @@ export function HistoricoLinks({ currentUser }: HistoricoLinksProps) {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                             {/* Busca */}
-                            <div className="lg:col-span-2">
+                            <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Buscar
                                 </label>
@@ -198,12 +302,25 @@ export function HistoricoLinks({ currentUser }: HistoricoLinksProps) {
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
                                 />
                             </div>
+
+                            {/* Data de Vencimento */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Data Vencimento
+                                </label>
+                                <input
+                                    type="date"
+                                    value={filters.dataVencimento}
+                                    onChange={(e) => handleFilterChange('dataVencimento', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
+                                />
+                            </div>
                         </div>
 
                         {/* Resumo */}
                         <div className="mt-4 flex items-center space-x-4 text-sm text-gray-600">
                             <span>Mostrando {filteredLinks.length} de {links.length} links</span>
-                            {(filters.search || filters.status || filters.dataInicio || filters.dataFim) && (
+                            {(filters.search || filters.status || filters.dataInicio || filters.dataFim || filters.dataVencimento) && (
                                 <span className="text-purple-600">• Filtros ativos</span>
                             )}
                         </div>
@@ -227,46 +344,141 @@ export function HistoricoLinks({ currentUser }: HistoricoLinksProps) {
                                     key={link.id}
                                     className="bg-gray-50 hover:bg-gray-100 rounded-lg p-6 transition-all duration-200 border border-gray-200"
                                 >
-                                    <div className="flex items-start justify-between mb-4">
-                                        <div className="flex items-center space-x-2">
-                      <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-medium">
-                        {link.status === 'ativo' ? 'Ativo' : 'Inativo'}
-                      </span>
-                                            <span className="text-gray-500 text-sm">#{link.id.slice(-8)}</span>
+                                    {editingLink === link.id ? (
+                                        <div className="space-y-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Nome</label>
+                                                    <input
+                                                        type="text"
+                                                        value={editData.nome}
+                                                        onChange={(e) => setEditData(prev => ({ ...prev, nome: e.target.value }))}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">URL</label>
+                                                    <input
+                                                        type="url"
+                                                        value={editData.url}
+                                                        onChange={(e) => setEditData(prev => ({ ...prev, url: e.target.value }))}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                                    />
+                                                </div>
+                                                <div className="md:col-span-2">
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Data de Vencimento</label>
+                                                    <input
+                                                        type="datetime-local"
+                                                        value={editData.expires_at}
+                                                        onChange={(e) => setEditData(prev => ({ ...prev, expires_at: e.target.value }))}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="flex space-x-2">
+                                                <button
+                                                    onClick={() => handleSave(link.id)}
+                                                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2"
+                                                >
+                                                    <CheckCircle className="w-4 h-4" />
+                                                    <span>Salvar</span>
+                                                </button>
+                                                <button
+                                                    onClick={handleCancel}
+                                                    className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2"
+                                                >
+                                                    <XCircle className="w-4 h-4" />
+                                                    <span>Cancelar</span>
+                                                </button>
+                                            </div>
                                         </div>
+                                    ) : (
+                                        <>
+                                            <div className="flex items-start justify-between mb-4">
+                                                <div className="flex items-center space-x-2">
+                                                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(link)}`}>
+                                                        {getStatusText(link)}
+                                                    </span>
+                                                    <span className="text-gray-500 text-sm">#{link.id.slice(-8)}</span>
+                                                </div>
 
-                                        <div className="flex items-center space-x-2 text-gray-500 text-sm">
-                                            <Calendar className="w-4 h-4" />
-                                            <span>{new Date(link.created_at).toLocaleString('pt-BR')}</span>
-                                        </div>
-                                    </div>
+                                                <div className="flex items-center space-x-2 text-gray-500 text-sm">
+                                                    <Calendar className="w-4 h-4" />
+                                                    <span>{new Date(link.created_at).toLocaleString('pt-BR')}</span>
+                                                </div>
+                                            </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        <div className="flex items-center space-x-2 text-gray-700">
-                                            <User className="w-4 h-4 text-purple-500" />
-                                            <span className="font-medium">{link.nome}</span>
-                                        </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                                                <div className="flex items-center space-x-2 text-gray-700">
+                                                    <User className="w-4 h-4 text-purple-500" />
+                                                    <span className="font-medium">{link.nome}</span>
+                                                </div>
 
-                                        <div className="flex items-center space-x-2 text-gray-700">
-                                            <Hash className="w-4 h-4 text-indigo-500" />
-                                            <span>{link.url}</span>
-                                        </div>
+                                                <div className="flex items-center space-x-2 text-gray-700">
+                                                    <Hash className="w-4 h-4 text-indigo-500" />
+                                                    <span className="truncate">{link.url || link.link}</span>
+                                                </div>
 
-                                        <div className="flex items-center space-x-2 text-gray-700">
-                                            {link.status === 'ativo' ? (
-                                                <CheckCircle className="w-4 h-4 text-green-500" />
-                                            ) : (
-                                                <XCircle className="w-4 h-4 text-red-500" />
+                                                <div className="flex items-center space-x-2 text-gray-700">
+                                                    {getStatusText(link) === 'Ativo' ? (
+                                                        <CheckCircle className="w-4 h-4 text-green-500" />
+                                                    ) : (
+                                                        <XCircle className="w-4 h-4 text-red-500" />
+                                                    )}
+                                                    <span>{getStatusText(link)}</span>
+                                                </div>
+                                            </div>
+
+                                            {link.expires_at && (
+                                                <div className="mb-4 flex items-center space-x-2 text-sm text-gray-600">
+                                                    <Clock className="w-4 h-4 text-orange-500" />
+                                                    <span>
+                                                        {new Date(link.expires_at) < new Date() ? 'Expirou em' : 'Expira em'} {' '}
+                                                        {new Date(link.expires_at).toLocaleString('pt-BR')}
+                                                    </span>
+                                                </div>
                                             )}
-                                            <span>{link.status === 'ativo' ? 'Ativo' : 'Inativo'}</span>
-                                        </div>
-                                    </div>
 
-                                    {link.expires_at && (
-                                        <div className="mt-3 flex items-center space-x-2 text-sm text-gray-600">
-                                            <Clock className="w-4 h-4 text-orange-500" />
-                                            <span>Expira em {new Date(link.expires_at).toLocaleDateString('pt-BR')}</span>
-                                        </div>
+                                            <div className="flex items-center space-x-2 pt-4 border-t border-gray-200">
+                                                <button
+                                                    onClick={() => handleEdit(link)}
+                                                    className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 p-2 rounded-lg transition-all duration-200 flex items-center space-x-1"
+                                                >
+                                                    <Edit2 className="w-4 h-4" />
+                                                    <span>Editar</span>
+                                                </button>
+
+                                                {currentUser.perfil === 'supervisao' && (
+                                                    <>
+                                                        <button
+                                                            onClick={() => handleResend(link)}
+                                                            disabled={resending[link.id]}
+                                                            className="text-green-600 hover:text-green-800 hover:bg-green-50 p-2 rounded-lg transition-all duration-200 flex items-center space-x-1 disabled:opacity-50"
+                                                        >
+                                                            {resending[link.id] ? (
+                                                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                                            ) : (
+                                                                <RefreshCw className="w-4 h-4" />
+                                                            )}
+                                                            <span>Reenviar</span>
+                                                        </button>
+
+                                                        <button
+                                                            onClick={() => handleDelete(link.id)}
+                                                            disabled={deleting[link.id]}
+                                                            className="text-red-600 hover:text-red-800 hover:bg-red-50 p-2 rounded-lg transition-all duration-200 flex items-center space-x-1 disabled:opacity-50"
+                                                        >
+                                                            {deleting[link.id] ? (
+                                                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                                            ) : (
+                                                                <Trash2 className="w-4 h-4" />
+                                                            )}
+                                                            <span>Apagar</span>
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </>
                                     )}
                                 </div>
                             ))}

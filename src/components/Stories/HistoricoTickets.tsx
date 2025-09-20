@@ -26,6 +26,7 @@ interface TicketWithUsuario {
 interface Filters {
   search: string;
   usuario: string;
+  atendente: string;
   enviado: string;
   pago: string;
   dataInicio: string;
@@ -33,6 +34,7 @@ interface Filters {
 }
 
 export function HistoricoTickets() {
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [tickets, setTickets] = useState<TicketWithUsuario[]>([]);
   const [filteredTickets, setFilteredTickets] = useState<TicketWithUsuario[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -45,6 +47,7 @@ export function HistoricoTickets() {
   const [filters, setFilters] = useState<Filters>({
     search: '',
     usuario: '',
+    atendente: '',
     enviado: '',
     pago: '',
     dataInicio: '',
@@ -52,6 +55,11 @@ export function HistoricoTickets() {
   });
 
   useEffect(() => {
+    // Carregar usuário atual
+    const userStr = localStorage.getItem('currentUser');
+    if (userStr) {
+      setCurrentUser(JSON.parse(userStr));
+    }
     loadData();
   }, []);
 
@@ -66,7 +74,17 @@ export function HistoricoTickets() {
         getUsuarios(),
         getValoresMensalidades()
       ]);
-      setTickets(ticketsData as TicketWithUsuario[]);
+      
+      // Filtrar tickets baseado no perfil do usuário
+      const userStr = localStorage.getItem('currentUser');
+      const user = userStr ? JSON.parse(userStr) : null;
+      
+      let filteredTicketsData = ticketsData as TicketWithUsuario[];
+      if (user && user.perfil !== 'supervisao') {
+        filteredTicketsData = filteredTicketsData.filter(ticket => ticket.usuario_id === user.id);
+      }
+      
+      setTickets(filteredTicketsData);
       setUsuarios(usuariosData);
       setValoresMensalidades(valoresData);
     } catch (err) {
@@ -89,8 +107,8 @@ export function HistoricoTickets() {
       );
     }
 
-    if (filters.usuario) {
-      filtered = filtered.filter(ticket => ticket.usuario?.nome === filters.usuario);
+    if (filters.atendente) {
+      filtered = filtered.filter(ticket => ticket.usuario?.nome === filters.atendente);
     }
 
     if (filters.enviado !== '') {
@@ -131,7 +149,7 @@ export function HistoricoTickets() {
   const clearFilters = () => {
     setFilters({
       search: '',
-      usuario: '',
+      atendente: '',
       enviado: '',
       pago: '',
       dataInicio: '',
@@ -269,27 +287,92 @@ export function HistoricoTickets() {
                 </div>
               </div>
 
-              {/* Usuario */}
+              {/* Atendente - só mostra para supervisão */}
+              {currentUser?.perfil === 'supervisao' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Atendente
+                  </label>
+                  <select
+                    value={filters.atendente}
+                    onChange={(e) => handleFilterChange('atendente', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 bg-white"
+                  >
+                    <option value="">Todos</option>
+                    {usuarios.map((usuario) => (
+                      <option key={usuario.id} value={usuario.nome}>
+                        {usuario.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Enviado */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Usuário
+                  Enviado
                 </label>
                 <select
-                  value={filters.usuario}
-                  onChange={(e) => handleFilterChange('usuario', e.target.value)}
+                  value={filters.enviado}
+                  onChange={(e) => handleFilterChange('enviado', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 bg-white"
                 >
                   <option value="">Todos</option>
-                  {usuarios.map((usuario) => (
-                    <option key={usuario.id} value={usuario.nome}>
-                      {usuario.nome}
-                    </option>
-                  ))}
+                  <option value="true">Enviados</option>
+                  <option value="false">Não Enviados</option>
                 </select>
               </div>
 
-              {/* Restante dos filtros permanece igual */}
-              {/* ... Enviado, Pago, DataInicio, DataFim ... */}
+              {/* Pago */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Pago
+                </label>
+                <select
+                  value={filters.pago}
+                  onChange={(e) => handleFilterChange('pago', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 bg-white"
+                >
+                  <option value="">Todos</option>
+                  <option value="true">Pagos</option>
+                  <option value="false">Não Pagos</option>
+                </select>
+              </div>
+
+              {/* Data Início */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Data Início
+                </label>
+                <input
+                  type="date"
+                  value={filters.dataInicio}
+                  onChange={(e) => handleFilterChange('dataInicio', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
+                />
+              </div>
+
+              {/* Data Fim */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Data Fim
+                </label>
+                <input
+                  type="date"
+                  value={filters.dataFim}
+                  onChange={(e) => handleFilterChange('dataFim', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
+                />
+              </div>
+            </div>
+
+            {/* Resumo dos filtros */}
+            <div className="mt-4 flex items-center space-x-4 text-sm text-gray-600">
+              <span>Mostrando {filteredTickets.length} de {tickets.length} tickets</span>
+              {(filters.search || filters.atendente || filters.enviado || filters.pago || filters.dataInicio || filters.dataFim) && (
+                <span className="text-purple-600">• Filtros ativos</span>
+              )}
             </div>
           </div>
 
@@ -325,6 +408,16 @@ export function HistoricoTickets() {
                         <span className="text-gray-500 text-sm">
                           #{ticket.id.slice(-8)}
                         </span>
+                        {ticket.enviado && (
+                          <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
+                            Enviado
+                          </span>
+                        )}
+                        {ticket.pago && (
+                          <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium">
+                            Pago
+                          </span>
+                        )}
                       </div>
                       
                       <div className="flex items-center space-x-2 text-gray-500 text-sm">
@@ -333,12 +426,15 @@ export function HistoricoTickets() {
                       </div>
                     </div>
 
-                    {/* Usuário */}
+                    {/* Dados do ticket */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                      <div className="flex items-center space-x-2 text-gray-700">
-                        <User className="w-4 h-4 text-purple-500" />
-                        <span className="font-medium">{ticket.usuario?.nome}</span>
-                      </div>
+                      {/* Só mostra atendente para supervisão */}
+                      {currentUser?.perfil === 'supervisao' && (
+                        <div className="flex items-center space-x-2 text-gray-700">
+                          <User className="w-4 h-4 text-purple-500" />
+                          <span className="font-medium">{ticket.usuario?.nome}</span>
+                        </div>
+                      )}
                       
                       <div className="flex items-center space-x-2 text-gray-700">
                         <Hash className="w-4 h-4 text-indigo-500" />
@@ -360,7 +456,47 @@ export function HistoricoTickets() {
                           </span>
                         )}
                       </div>
+                      
+                      <div className="flex items-center space-x-2 text-gray-700">
+                        <Phone className="w-4 h-4 text-orange-500" />
+                        <span>{ticket.telefone}</span>
+                      </div>
+                      
+                      <div className="flex items-center space-x-2 text-gray-700">
+                        <span className="text-sm">Parcelas: {ticket.qtd_mensalidades}x</span>
+                      </div>
                     </div>
+
+                    {/* Observações */}
+                    {ticket.observacoes && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                        <div className="flex items-start space-x-2">
+                          <MessageSquare className="w-4 h-4 text-blue-600 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-medium text-blue-800">Observações:</p>
+                            <p className="text-sm text-blue-700">{ticket.observacoes}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Datas de envio e pagamento */}
+                    {(ticket.data_envio || ticket.data_pagamento) && (
+                      <div className="flex items-center space-x-4 pt-4 border-t border-gray-200 text-sm text-gray-600">
+                        {ticket.data_envio && (
+                          <div className="flex items-center space-x-1">
+                            <Send className="w-4 h-4 text-green-500" />
+                            <span>Enviado: {new Date(ticket.data_envio).toLocaleString('pt-BR')}</span>
+                          </div>
+                        )}
+                        {ticket.data_pagamento && (
+                          <div className="flex items-center space-x-1">
+                            <CreditCard className="w-4 h-4 text-blue-500" />
+                            <span>Pago: {new Date(ticket.data_pagamento).toLocaleString('pt-BR')}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

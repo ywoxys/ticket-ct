@@ -431,6 +431,52 @@ export const updateTicket = async (id: string, updates: Partial<Ticket>) => {
   return data;
 };
 
+// Funções para clientes
+export const getClientes = async () => {
+  const { data, error } = await supabase
+    .from('clientes')
+    .select('*')
+    .eq('ativo', true)
+    .order('nome');
+  
+  if (error) throw error;
+  return data;
+};
+
+export const distribuirClientes = async (usuarioId: string, categoria: string, quantidade: number) => {
+  // Buscar clientes disponíveis da categoria
+  const { data: clientes, error: clientesError } = await supabase
+    .from('clientes')
+    .select('*')
+    .eq('categoria', categoria)
+    .eq('ativo', true)
+    .limit(quantidade);
+  
+  if (clientesError) throw clientesError;
+  
+  if (clientes.length === 0) {
+    throw new Error('Nenhum cliente disponível para distribuição');
+  }
+  
+  // Criar registros na tabela clientes_distribuidos
+  const clientesParaDistribuir = clientes.map(cliente => ({
+    usuario_id: usuarioId,
+    matricula: cliente.matricula,
+    nome: cliente.nome,
+    telefone: cliente.telefone,
+    categoria: cliente.categoria,
+    status: 'pendente'
+  }));
+  
+  const { data, error } = await supabase
+    .from('clientes_distribuidos')
+    .insert(clientesParaDistribuir)
+    .select();
+  
+  if (error) throw error;
+  return data;
+};
+
 // Funções para configurações do supervisor
 export const getConfiguracoesSupervisor = async () => {
   const { data, error } = await supabase

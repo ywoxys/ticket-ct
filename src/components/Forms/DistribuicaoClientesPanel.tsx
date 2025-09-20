@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Send, Loader2, UserCheck } from 'lucide-react';
-import { getUsuarios, getConfiguracoesSupervisor } from '../../lib/supabase.ts';
-import type { Usuario, DistribuicaoClientes, ConfiguracaoSupervisor } from '../../types';
+import { getUsuarios, getConfiguracoesSupervisor, getClientes, distribuirClientes } from '../../lib/supabase.ts';
+import type { Usuario, DistribuicaoClientes, ConfiguracaoSupervisor, Cliente } from '../../types';
 
 export function DistribuicaoClientesPanel() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [mesReferente, setMesReferente] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -18,16 +19,28 @@ export function DistribuicaoClientesPanel() {
 
   useEffect(() => {
     loadUsuarios();
+    loadClientes();
     loadMesReferente();
   }, []);
 
   const loadUsuarios = async () => {
     try {
       const data = await getUsuarios();
-      setUsuarios(data);
+      // Filtrar apenas usuários de ligação
+      setUsuarios(data.filter(u => u.perfil === 'ligacao'));
     } catch (err) {
       console.error('Erro ao carregar usuários:', err);
       setError('Erro ao carregar usuários');
+    }
+  };
+
+  const loadClientes = async () => {
+    try {
+      const data = await getClientes();
+      setClientes(data);
+    } catch (err) {
+      console.error('Erro ao carregar clientes:', err);
+      setError('Erro ao carregar clientes');
     }
   };
 
@@ -53,8 +66,15 @@ export function DistribuicaoClientesPanel() {
     }
 
     const usuario = usuarios.find(u => u.id === formData.usuario_id);
-    if (!usuario?.id_planilha) {
-      setError('O usuário selecionado não possui ID da planilha configurado.');
+    if (!usuario) {
+      setError('Usuário não encontrado.');
+      return;
+    }
+
+    // Verificar se há clientes suficientes da categoria
+    const clientesDisponiveis = clientes.filter(c => c.categoria === formData.categoria);
+    if (clientesDisponiveis.length < formData.quantidade) {
+      setError(`Apenas ${clientesDisponiveis.length} clientes disponíveis da categoria ${formData.categoria}`);
       return;
     }
 
@@ -63,16 +83,8 @@ export function DistribuicaoClientesPanel() {
     setSuccess('');
 
     try {
-      const webhookUrl = 'https://script.google.com/macros/s/AKfycbxQoRMlfITOemcQma_EtNREQkoYAsjQD1oOCkSsdrkG-OBSDxBPPBfG9M4iZhmIZYZ_4Q/exec';
-      
-      const params = new URLSearchParams({
-        usuario_id: usuario.id_planilha,
-        categoria: formData.categoria,
-        aba_destino: formData.aba_destino,
-        quantidade: formData.quantidade.toString(),
-      });
-
-      await fetch(`${webhookUrl}?${params}`, { method: 'GET', mode: 'no-cors' });
+      // Distribuir clientes diretamente na tabela clientes_distribuidos
+      await distribuirClientes(formData.usuario_id, formData.categoria, formData.quantidade);
 
       setSuccess('Distribuição de clientes enviada com sucesso!');
       
@@ -83,10 +95,13 @@ export function DistribuicaoClientesPanel() {
         quantidade: 1,
       });
 
+      // Recarregar clientes para atualizar disponibilidade
+      loadClientes();
+
       setTimeout(() => setSuccess(''), 5000);
     } catch (err) {
       console.error('Erro ao enviar distribuição:', err);
-      setError('Erro ao enviar distribuição de clientes');
+      setError(err.message || 'Erro ao distribuir clientes');
     } finally {
       setLoading(false);
     }
@@ -102,12 +117,16 @@ export function DistribuicaoClientesPanel() {
     { value: '6', label: '6' },
   ];
 
+  const getClientesDisponiveis = (categoria: string) => {
+    return clientes.filter(c => c.categoria === categoria).length;
+  };
+
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
         <div className="bg-gradient-to-r from-teal-600 to-teal-700 p-6">
           <h2 className="text-2xl font-bold text-white">Distribuição de Clientes</h2>
-          <p className="text-teal-100 mt-1">Distribua clientes para os usuários através da planilha</p>
+          <p className="text-teal-100 mt-1">Distribua clientes para os usuários de ligação</p>
         </div>
 
         <div className="p-6">
@@ -118,6 +137,19 @@ export function DistribuicaoClientesPanel() {
               <span>{success}</span>
             </div>
           )}
+
+          {/* Resumo de clientes disponíveis */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <h3 className="font-semibold text-blue-800 mb-2">Clientes Disponíveis por Categoria:</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              {categorias.map(cat => (
+                <div key={cat.value} className="flex justify-between">
+                  <span className="text-blue-700">{cat.label}:</span>
+                  <span className="font-semibold text-blue-800">{getClientesDisponiveis(cat.value)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -133,7 +165,7 @@ export function DistribuicaoClientesPanel() {
                   <option value="">Selecione um usuário</option>
                   {usuarios.map((u) => (
                     <option key={u.id} value={u.id}>
-                      {u.nome} {u.id_planilha ? `(ID: ${u.id_planilha})` : '(Sem ID)'}
+                      {u.nome}
                     </option>
                   ))}
                 </select>
@@ -148,20 +180,12 @@ export function DistribuicaoClientesPanel() {
                   className="w-full px-4 py-3 border rounded-lg"
                   required
                 >
-                  {categorias.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  {categorias.map(c => (
+                    <option key={c.value} value={c.value}>
+                      {c.label} ({getClientesDisponiveis(c.value)} disponíveis)
+                    </option>
+                  ))}
                 </select>
-              </div>
-
-              {/* Aba destino */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Aba de Destino *</label>
-                <input
-                  type="text"
-                  value={formData.aba_destino}
-                  readOnly
-                  className="w-full px-4 py-3 border rounded-lg bg-gray-100 cursor-not-allowed"
-                />
-                <p className="text-sm text-gray-500 mt-1">Definida automaticamente pelo mês de referência</p>
               </div>
 
               {/* Quantidade */}
@@ -170,12 +194,15 @@ export function DistribuicaoClientesPanel() {
                 <input
                   type="number"
                   min="1"
-                  max="1000"
+                  max={getClientesDisponiveis(formData.categoria)}
                   value={formData.quantidade}
                   onChange={(e) => setFormData(prev => ({ ...prev, quantidade: parseInt(e.target.value) || 1 }))}
                   className="w-full px-4 py-3 border rounded-lg"
                   required
                 />
+                <p className="text-sm text-gray-500 mt-1">
+                  Máximo: {getClientesDisponiveis(formData.categoria)} clientes
+                </p>
               </div>
             </div>
 
@@ -184,15 +211,15 @@ export function DistribuicaoClientesPanel() {
               <div className="bg-teal-50 border border-teal-200 rounded-lg p-4">
                 <h4 className="font-semibold text-teal-800 mb-2">Resumo:</h4>
                 <p><strong>Usuário:</strong> {usuarios.find(u => u.id === formData.usuario_id)?.nome}</p>
-                <p><strong>Aba Destino:</strong> {formData.aba_destino}</p>
                 <p><strong>Categoria:</strong> {formData.categoria}</p>
                 <p><strong>Quantidade:</strong> {formData.quantidade}</p>
+                <p><strong>Disponíveis:</strong> {getClientesDisponiveis(formData.categoria)}</p>
               </div>
             )}
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || getClientesDisponiveis(formData.categoria) < formData.quantidade}
               className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 px-6 rounded-lg flex items-center justify-center gap-2"
             >
               {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
